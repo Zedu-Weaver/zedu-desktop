@@ -2,6 +2,10 @@ import 'package:zedu/core/core.dart';
 import 'package:zedu/features/features.dart';
 
 abstract interface class UserProfileRepository {
+  Future<Result<List<String>>> getWorkspacePermissions({
+    required String userId,
+    required String orgId,
+  });
   Future<Result<ProfileAccount>> getAccount();
   Future<Result<ProfileAccount>> updateAccount(ProfileAccount account);
   Future<Result<void>> deleteAccount();

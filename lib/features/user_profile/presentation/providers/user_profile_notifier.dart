@@ -256,40 +256,99 @@ class UserProfileNotifier extends Notifier<UserProfileState> {
     }
   }
 
-  Future<String> _getRoleId(String? orgId) async {
-    try {
-      if (orgId == null) return '019700d8-9085-7f7b-839a-fcbd08b9e26d';
-      final api = locator<ApiBaseService>();
-      final response = await api.get<Map<String, dynamic>>(
-        path: '/organisations/$orgId/roles',
+  Future<Result<List<String>>> getInvitationPermissions({
+    required String orgId,
+  }) async {
+    final userId = ref.read(authNotifierProvider).user?.id;
+    if (userId == null || userId.isEmpty) {
+      return const Failure(
+        ApiFailure(
+          message: 'Please sign in before inviting teammates.',
+          kind: ApiFailureKind.client,
+        ),
       );
-      final data = response.data['data'] as List<dynamic>?;
-      if (data != null && data.isNotEmpty) {
-        return data.last['id']
-            as String; // Just pick a valid role ID to avoid 404
-      }
-    } catch (e) {
-      // ignore
     }
-    return '019700d8-9085-7f7b-839a-fcbd08b9e26d';
+    return _repository.getWorkspacePermissions(userId: userId, orgId: orgId);
   }
 
-  Future<String?> generateInviteLink() async {
-    try {
-      final api = locator<ApiBaseService>();
-      var orgId = ref.read(workspaceProvider).selectedWorkspace?.id;
-      if (locator<AppConfig>().usesMockData &&
-          (orgId == null || orgId.length < 36)) {
-        orgId = '019700db-4e22-7f90-a20e-f9116291ef24';
-      }
-      final roleId = await _getRoleId(orgId);
-      final response = await api.post<Map<String, dynamic>>(
-        path: '/invite/general',
-        data: {'organisation_id': orgId, 'role_id': roleId},
+  Future<bool> _checkInvitationPermission(
+    String orgId,
+    String permission,
+  ) async {
+    final result = await getInvitationPermissions(orgId: orgId);
+    final String? error = switch (result) {
+      Success<List<String>>() =>
+        result.value.contains(permission)
+            ? null
+            : permission == 'can_invite_members'
+            ? "You don't have permission to invite teammates in this workspace."
+            : "You don't have permission to create an invite link in this workspace.",
+      Failure<List<String>>() => result.error.friendlyMessage,
+    };
+    if (error != null) state = state.copyWith(isSaving: false, error: error);
+    return error == null;
+  }
+
+  Future<String> _getRoleId(String orgId) async {
+    if (locator<AppConfig>().usesMockData) return 'mock-user-role';
+    final response = await locator<ApiBaseService>().get<Map<String, dynamic>>(
+      path: '/organisations/$orgId/roles',
+    );
+    final roles = response.data['data'] as List<dynamic>;
+    final role = roles
+        .cast<Map<String, dynamic>>()
+        .where((role) => (role['name'] as String?)?.toLowerCase() == 'user')
+        .firstOrNull;
+    if (role == null) {
+      throw const ApiFailure(
+        message: 'No member role is available in this workspace.',
+        kind: ApiFailureKind.client,
       );
-      final data = response.data['data'] as Map<String, dynamic>?;
-      return data?['invitation_link'] as String?;
-    } catch (e) {
+    }
+    return role['id'] as String;
+  }
+
+  Future<String?> generateInviteLink({String? orgId}) async {
+    state = state.copyWith(clearError: true, clearSuccess: true);
+    final targetOrgId =
+        orgId ?? ref.read(workspaceProvider).selectedWorkspace?.id;
+    if (targetOrgId == null || targetOrgId.isEmpty) {
+      state = state.copyWith(
+        error: 'Select a workspace before inviting teammates.',
+      );
+      return null;
+    }
+    if (!await _checkInvitationPermission(
+      targetOrgId,
+      'can_manage_general_invite_link',
+    )) {
+      return null;
+    }
+    if (locator<AppConfig>().usesMockData) {
+      state = state.copyWith(
+        error: 'Invite links are unavailable in mock mode.',
+      );
+      return null;
+    }
+    try {
+      final roleId = await _getRoleId(targetOrgId);
+      final response = await locator<ApiBaseService>()
+          .post<Map<String, dynamic>>(
+            path: '/invite/general',
+            data: {'organisation_id': targetOrgId, 'role_id': roleId},
+          );
+      final data = response.data['data'] as Map<String, dynamic>;
+      final link = data['invitation_link'] as String?;
+      if (link == null || link.isEmpty) {
+        throw const ApiFailure(
+          message: 'Failed to generate invite link.',
+          kind: ApiFailureKind.client,
+        );
+      }
+      return link;
+    } catch (error) {
+      final failure = error is ApiFailure ? error : ApiFailure.unknown(error);
+      state = state.copyWith(error: failure.friendlyMessage);
       return null;
     }
   }
@@ -312,33 +371,38 @@ class UserProfileNotifier extends Notifier<UserProfileState> {
     required String email,
     required String role,
     String? userId,
+    String? orgId,
   }) async {
     state = state.copyWith(
       isSaving: true,
       clearError: true,
       clearSuccess: true,
     );
-    var orgId = ref.read(workspaceProvider).selectedWorkspace?.id;
-    if (locator<AppConfig>().usesMockData &&
-        (orgId == null || orgId.length < 36)) {
-      orgId = '019700db-4e22-7f90-a20e-f9116291ef24';
-    }
-
-    // Map human readable role to a valid UUID role_id by fetching from backend
-    String roleId = await _getRoleId(orgId);
-
-    if (orgId == null) {
+    final targetOrgId =
+        orgId ?? ref.read(workspaceProvider).selectedWorkspace?.id;
+    if (targetOrgId == null || targetOrgId.isEmpty) {
       state = state.copyWith(
         isSaving: false,
-        error: 'No active workspace selected to invite members.',
+        error: 'Select a workspace before inviting teammates.',
       );
+      return;
+    }
+    if (!await _checkInvitationPermission(targetOrgId, 'can_invite_members')) {
+      return;
+    }
+    String roleId;
+    try {
+      roleId = await _getRoleId(targetOrgId);
+    } catch (error) {
+      final failure = error is ApiFailure ? error : ApiFailure.unknown(error);
+      state = state.copyWith(isSaving: false, error: failure.friendlyMessage);
       return;
     }
 
     final result = await _repository.inviteMember(
       email: email,
       role: roleId,
-      orgId: orgId,
+      orgId: targetOrgId,
     );
     switch (result) {
       case Success<TeamMember>():
@@ -367,7 +431,7 @@ class UserProfileNotifier extends Notifier<UserProfileState> {
               )
               .toList();
           await storage.writeData(
-            'mock_team_members_$orgId',
+            'mock_team_members_$targetOrgId',
             jsonEncode(jsonList),
           );
         }
