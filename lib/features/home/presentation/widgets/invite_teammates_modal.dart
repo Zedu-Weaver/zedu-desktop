@@ -2,7 +2,9 @@ import 'package:zedu/core/core.dart';
 import 'package:zedu/features/features.dart';
 
 class InviteTeammatesModal extends ConsumerStatefulWidget {
-  const InviteTeammatesModal({super.key});
+  const InviteTeammatesModal({super.key, this.workspace});
+
+  final Workspace? workspace;
 
   @override
   ConsumerState<InviteTeammatesModal> createState() =>
@@ -104,6 +106,7 @@ class _InviteTeammatesModalState extends ConsumerState<InviteTeammatesModal> {
     for (final invite in _invites) {
       // Assuming 'User' role by default since there's no dropdown in UI
       await notifier.inviteMember(
+        orgId: widget.workspace?.id,
         email: invite['email']!,
         role: 'User',
         userId: invite['userId'],
@@ -156,12 +159,16 @@ class _InviteTeammatesModalState extends ConsumerState<InviteTeammatesModal> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Add people to #general',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: colors.textPrimary,
+                Expanded(
+                  child: Text(
+                    widget.workspace == null
+                        ? 'Invite teammates'
+                        : 'Invite teammates to ${widget.workspace!.name}',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: colors.textPrimary,
+                    ),
                   ),
                 ),
                 IconButton(
@@ -299,7 +306,9 @@ class _InviteTeammatesModalState extends ConsumerState<InviteTeammatesModal> {
                         final notifier = ref.read(
                           userProfileNotifierProvider.notifier,
                         );
-                        final link = await notifier.generateInviteLink();
+                        final link = await notifier.generateInviteLink(
+                          orgId: widget.workspace?.id,
+                        );
                         if (link != null && context.mounted) {
                           await Clipboard.setData(ClipboardData(text: link));
                           if (context.mounted) {
@@ -315,7 +324,10 @@ class _InviteTeammatesModalState extends ConsumerState<InviteTeammatesModal> {
                         } else if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: const Text('Failed to generate link'),
+                              content: Text(
+                                ref.read(userProfileNotifierProvider).error ??
+                                    'Failed to generate link',
+                              ),
                               backgroundColor: colors.error,
                             ),
                           );

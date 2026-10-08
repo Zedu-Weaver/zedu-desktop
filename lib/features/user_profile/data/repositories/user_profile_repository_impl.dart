@@ -7,6 +7,14 @@ class UserProfileRepositoryImpl implements UserProfileRepository {
 
   final UserProfileRemoteDataSource _remote;
 
+  @override
+  Future<Result<List<String>>> getWorkspacePermissions({
+    required String userId,
+    required String orgId,
+  }) => _guard(
+    () => _remote.getWorkspacePermissions(userId: userId, orgId: orgId),
+  );
+
   static const _tag = 'UserProfileRepository';
 
   @override

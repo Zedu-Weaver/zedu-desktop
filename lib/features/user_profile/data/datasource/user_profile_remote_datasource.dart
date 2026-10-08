@@ -4,6 +4,10 @@ import 'package:zedu/core/core.dart';
 import 'package:zedu/features/features.dart';
 
 abstract interface class UserProfileRemoteDataSource {
+  Future<List<String>> getWorkspacePermissions({
+    required String userId,
+    required String orgId,
+  });
   Future<ProfileAccountModel> getAccount();
   Future<ProfileAccountModel> updateAccount(ProfileAccount account);
   Future<void> deleteAccount();
@@ -47,6 +51,28 @@ class UserProfileRemoteDataSourceImpl implements UserProfileRemoteDataSource {
 
   final AppConfig _config;
   final ApiBaseService _apiBaseService;
+
+  @override
+  Future<List<String>> getWorkspacePermissions({
+    required String userId,
+    required String orgId,
+  }) async {
+    if (_config.usesMockData) {
+      return const ['can_invite_members', 'can_manage_general_invite_link'];
+    }
+    final response = await _apiBaseService.get<Map<String, dynamic>>(
+      path: '/users/$userId/organisations/$orgId/roles',
+    );
+    try {
+      final data = response.data['data'] as Map<String, dynamic>;
+      final permissions = data['permissions'];
+      return permissions == null
+          ? const []
+          : (permissions as List<dynamic>).cast<String>().toList();
+    } catch (error) {
+      throw ApiFailure.fromParsingError(error);
+    }
+  }
 
   static const _tag = 'UserProfileRemoteDataSource';
 

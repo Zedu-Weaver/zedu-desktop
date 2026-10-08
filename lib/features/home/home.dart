@@ -10,3 +10,5 @@ export 'presentation/widgets/search_panel.dart';
 export 'presentation/widgets/group_details_panel.dart';
 export 'presentation/widgets/invite_teammates_modal.dart';
 export 'presentation/presentation.dart';
+
+export 'presentation/widgets/invite_teammates_card.dart';

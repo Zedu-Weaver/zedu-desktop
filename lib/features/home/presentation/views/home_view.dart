@@ -380,7 +380,7 @@ class _ChatArea extends StatelessWidget {
             style: TextStyle(fontSize: 16, color: colors.textPrimary),
           ),
           const SizedBox(height: 32),
-          const _InviteCard(),
+          const InviteTeammatesCard(),
         ],
       ),
     );
@@ -482,58 +482,6 @@ class _HeaderAction extends StatelessWidget {
             label,
             style: TextStyle(color: colors.textPrimary, fontSize: 13),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InviteCard extends StatelessWidget {
-  const _InviteCard();
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        border: Border.all(color: colors.divider),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: colors.primaryBg,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(Icons.person_add_outlined, color: colors.primary),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Invite teammates',
-                  style: TextStyle(
-                    color: colors.textPrimary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Add more team members to collaborate',
-                  style: TextStyle(color: colors.textHint, fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-          Icon(Icons.chevron_right, color: colors.textHint),
         ],
       ),
     );
